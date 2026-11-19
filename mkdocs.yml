@@ -1,0 +1,64 @@
+site_name: Аутентификация и авторизация в веб-приложениях
+site_description: >-
+  Обзор подходов к аутентификации и авторизации в веб-приложениях по материалам
+  НИР "Исследование подходов к аутентификации и авторизации в веб-приложениях"
+site_author: Шаулова Мария Владимировна, P4109
+site_url: https://iamqti.github.io/auth-ssg-research/
+repo_url: https://github.com/iamqti/auth-ssg-research
+repo_name: iamqti/auth-ssg-research
+copyright: >-
+  Содержимое сайта распространяется по лицензии CC BY 4.0, исходный код — по лицензии MIT.
+
+theme:
+  name: material
+  language: ru
+  palette:
+    - media: "(prefers-color-scheme: light)"
+      scheme: default
+      primary: indigo
+      accent: indigo
+      toggle:
+        icon: material/weather-night
+        name: Тёмная тема
+    - media: "(prefers-color-scheme: dark)"
+      scheme: slate
+      primary: indigo
+      accent: indigo
+      toggle:
+        icon: material/weather-sunny
+        name: Светлая тема
+  features:
+    - navigation.instant
+    - navigation.tracking
+    - navigation.sections
+    - navigation.top
+    - search.suggest
+    - search.highlight
+    - content.code.copy
+
+nav:
+  - Введение: index.md
+  - Парольная и MFA: password-mfa.md
+  - Эволюция протоколов: protocol-timeline.md
+  - Токены и сертификаты: tokens-certificates.md
+  - Беспарольная аутентификация: passwordless.md
+  - Модели авторизации: authorization-models.md
+  - Классификация и выводы: classification.md
+
+markdown_extensions:
+  - admonition
+  - footnotes
+  - tables
+  - pymdownx.highlight
+  - pymdownx.superfences
+  - pymdownx.arithmatex:
+      generic: true
+
+extra_javascript:
+  - javascripts/mathjax.js
+  - https://unpkg.com/mathjax@3/es5/tex-mml-chtml.js
+
+plugins:
+  - search
+
+use_directory_urls: true

@@ -1,0 +1,141 @@
+name: Build and publish site
+
+on:
+  push:
+    branches: [main]
+  workflow_dispatch:
+
+# Минимальные права по умолчанию для всего workflow (принцип наименьших
+# привилегий) — каждая job ниже запрашивает только то, что ей реально нужно.
+permissions:
+  contents: read
+
+concurrency:
+  group: pages
+  cancel-in-progress: false
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+
+      - name: Setup Python
+        uses: actions/setup-python@6d4fd22b20465ccc0f7354476588e8df7c9ca0e0 # v7.1.0
+        with:
+          python-version: "3.14"
+          cache: "pip"
+
+      - name: Install dependencies
+        run: pip install -r requirements.txt
+
+      - name: Build site (strict)
+        run: |
+          time mkdocs build --strict
+          du -sh site
+
+      - name: Setup Pages
+        uses: actions/configure-pages@45bfe0192ca1faeb007ade9deae92b16b8254a0d # v6.0.0
+
+      - name: Upload artifact for GitHub Pages
+        uses: actions/upload-pages-artifact@fc324d3547104276b827a68afc52ff2a11cc49c9 # v5.0.0
+        with:
+          path: site
+
+      - name: Upload artifact for Helios
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        with:
+          name: helios-site
+          path: site
+          retention-days: 1
+          if-no-files-found: error
+
+  deploy-pages:
+    needs: build
+    runs-on: ubuntu-latest
+    permissions:
+      pages: write
+      id-token: write
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}
+    steps:
+      - name: Deploy to GitHub Pages
+        id: deployment
+        uses: actions/deploy-pages@368f82528645a54fb793d4d04e342629a3f51346 # v5.0.1
+
+      - name: Verify deployment (HTTP + control string)
+        run: |
+          set -euo pipefail
+          url="${{ steps.deployment.outputs.page_url }}"
+          code=$(curl -s -o /tmp/page.html -w "%{http_code}" "$url")
+          echo "HTTP code: $code"
+          [ "$code" = "200" ]
+          grep -q "Аутентификация и авторизация" /tmp/page.html
+
+  # Отключена по умолчанию: включается переменной репозитория HELIOS_ENABLED=true
+  # после того как в Secrets добавлены HELIOS_USER и HELIOS_SSH_KEY, а в Variables —
+  # HELIOS_KNOWN_HOSTS (строка из ~/.ssh/known_hosts, полученная один раз ЗАРАНЕЕ
+  # через `ssh-keyscan -p 2222 helios.cs.ifmo.ru`, а не во время самого workflow —
+  # иначе первое подключение CI слепо доверяет ключу хоста, см. раздел 4 отчёта).
+  deploy-helios:
+    needs: build
+    if: vars.HELIOS_ENABLED == 'true'
+    runs-on: ubuntu-latest
+    permissions: {}
+    steps:
+      - name: Download site artifact
+        uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333 # v8.0.2
+        with:
+          name: helios-site
+          path: site
+
+      - name: Deploy to Helios over SSH
+        env:
+          HELIOS_USER: ${{ secrets.HELIOS_USER }}
+          HELIOS_SSH_KEY: ${{ secrets.HELIOS_SSH_KEY }}
+          HELIOS_KNOWN_HOSTS: ${{ vars.HELIOS_KNOWN_HOSTS }}
+        run: |
+          set -euo pipefail
+          if [ -z "${HELIOS_USER}" ] || [ -z "${HELIOS_SSH_KEY}" ] || [ -z "${HELIOS_KNOWN_HOSTS}" ]; then
+            echo "::error::Add repository secrets HELIOS_USER, HELIOS_SSH_KEY and variable HELIOS_KNOWN_HOSTS."
+            exit 1
+          fi
+
+          install -m 700 -d ~/.ssh
+          printf '%s\n' "$HELIOS_SSH_KEY" > ~/.ssh/id_ed25519
+          chmod 600 ~/.ssh/id_ed25519
+          # Известный заранее ключ хоста — НЕ результат ssh-keyscan внутри job.
+          printf '%s\n' "$HELIOS_KNOWN_HOSTS" > ~/.ssh/known_hosts
+          chmod 600 ~/.ssh/known_hosts
+
+          ssh_opts=(-i "$HOME/.ssh/id_ed25519" -o IdentitiesOnly=yes -o StrictHostKeyChecking=yes)
+          target="${HELIOS_USER}@helios.cs.ifmo.ru"
+          remote_dir="public_html/auth-ssg-research"
+
+          tar -C site -cf site.tar .
+          scp "${ssh_opts[@]}" -P 2222 site.tar "${target}:auth-ssg-research-site.tar"
+          ssh "${ssh_opts[@]}" -p 2222 "$target" \
+            "rm -rf ~/${remote_dir} && mkdir -p ~/${remote_dir} && \
+             tar -C ~/${remote_dir} -xf ~/auth-ssg-research-site.tar && \
+             rm -f ~/auth-ssg-research-site.tar && \
+             chmod 755 ~/public_html ~/${remote_dir} && \
+             chmod -R a+rX ~/${remote_dir} && \
+             sha256sum ~/${remote_dir}/index.html" > remote_checksum.txt
+
+          echo "--- Контроль целостности: локальный vs удалённый index.html ---"
+          local_sum=$(sha256sum site/index.html | awk '{print $1}')
+          remote_sum=$(awk '{print $1}' remote_checksum.txt)
+          echo "local:  $local_sum"
+          echo "remote: $remote_sum"
+          [ "$local_sum" = "$remote_sum" ]
+
+      - name: Verify HTTP response from Helios
+        run: |
+          set -euo pipefail
+          url="https://helios.cs.ifmo.ru/~${{ secrets.HELIOS_USER }}/auth-ssg-research/"
+          code=$(curl -s -o /tmp/helios.html -w "%{http_code}" "$url")
+          echo "HTTP code: $code"
+          [ "$code" = "200" ]
+          grep -q "Аутентификация и авторизация" /tmp/helios.html
