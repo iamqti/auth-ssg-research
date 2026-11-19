@@ -1,7 +1,7 @@
 # auth-ssg-research
 
 Статический сайт по материалам НИР «Исследование подходов к аутентификации и
-авторизации в веб-приложениях» (Шаулова М.В., P4109). Собран генератором
+авторизации в веб-приложениях». Собран генератором
 [MkDocs](https://www.mkdocs.org/) с темой
 [Material for MkDocs](https://squidfunk.github.io/mkdocs-material/).
 
@@ -27,7 +27,7 @@ push в `main`:
 
 - на **GitHub Pages** — через `actions/upload-pages-artifact` +
   `actions/deploy-pages`;
-- на **Helios ИТМО** — по SSH с отдельным deploy-ключом (включается
+- на **Helios** — по SSH с отдельным deploy-ключом (включается
   репозиторной переменной `HELIOS_ENABLED` и секретами `HELIOS_USER` /
   `HELIOS_SSH_KEY`).
 
