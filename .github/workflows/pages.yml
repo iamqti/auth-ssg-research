@@ -134,7 +134,10 @@ jobs:
       - name: Verify HTTP response from Helios
         run: |
           set -euo pipefail
-          url="https://helios.cs.ifmo.ru/~${{ secrets.HELIOS_USER }}/auth-ssg-research/"
+          # Публичная веб-раздача public_html идёт через se.ifmo.ru, а не
+          # через helios.cs.ifmo.ru (тот отдаёт 302 на se.ifmo.ru) — обнаружено
+          # при первом реальном прогоне деплоя.
+          url="https://se.ifmo.ru/~${{ secrets.HELIOS_USER }}/auth-ssg-research/"
           code=$(curl -s -o /tmp/helios.html -w "%{http_code}" "$url")
           echo "HTTP code: $code"
           [ "$code" = "200" ]
